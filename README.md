@@ -19,7 +19,10 @@ higher-order asymptotic approximation properties of the EB posterior distributio
 
 
 
-
+The min idea of distance trading is to identify time series that are close to each other (in an euclidean sense) and exploit this similarity. The steps to be followed are:
+1) Out of a sample of standardized time series, choose the pair that is the most similar. The metric generally used is the euclidean distance yet other alternatives are possible
+2) Choose the two time series that are the most similar ad compute their spread.
+3) Go long in one and short in the other based on the spread
 
 
 import numpy as np
@@ -71,7 +74,7 @@ def get_quantiles(dataset_train, distance = "euclidean", quantiles = [0.05, 0.2,
 
     return [min_value_index[0], min_value_index[1]] + np.quantile(differenc_TS, q = [0.05, 0.2, 0.8, 0.95]).tolist()
 
-    # Both long and short
+# Both long and short
 def set_position_long(prices, lower_bound_open, lower_bound_close, upper_bound_open, upper_bound_close):
     # Return buy signals such that:
     # 5) go long or keep a long position
@@ -126,7 +129,7 @@ def compute_profit(prices, position):
     
     return profits[1:] # The first observation is always with  closed position.
 
-    def distance_strategy(data_train, data_test, distance = "euclidean", quantiles = [0.05, 0.2, 0.8, 0.95]):
+def distance_strategy(data_train, data_test, distance = "euclidean", quantiles = [0.05, 0.2, 0.8, 0.95]):
     idx_TS1, idx_TS2, lower_bound_open, lower_bound_close, upper_bound_close, upper_bound_open = get_quantiles(data_train, distance = distance, quantiles = [0.05, 0.2, 0.8, 0.95])
 
     differenced_TS = data_test[idx_TS1] - data_test[idx_TS2]
@@ -135,92 +138,6 @@ def compute_profit(prices, position):
     initialize_df[f"Profits {idx_TS2}"] = compute_profit(prices = (-data_test[idx_TS2]).tolist(), position = set_position_long(differenced_TS, lower_bound_open, lower_bound_close, upper_bound_open, upper_bound_close))
     return initialize_df
 
-
 profits = distance_strategy(data_train = dataset.iloc[:500], data_test = dataset.iloc[500:], 
                             distance = "euclidean", quantiles = [0.05, 0.2, 0.8, 0.95])
 plt.plot(profits.cumsum())
-
-
-
-
-Cointegration: Binary
-The cointegration is an econometric notion that is commonly used to correctly price assets. The main idea is that there might exist a linear combination of time series that is linear. This constant relation can be used to adress mis-pricing. More in detail, it is assumed:
-$$
-\alpha x_t + \delta y_t \sim I(0)
-$$
-
-With $x_t\sim I(1)$ and $y_t\sim I(1)$. Now, considering $[\alpha \delta]$ as a cointegrating relation, then $\gamma[\alpha \delta]$ will be a cointegrating relation as well $\forall \gamma \in \R$. It is then possible to simplify the relation to:
-$$
-x_t + \beta y_t \sim I(0)
-$$
-with, intuitively, $\beta = \frac{\delta}{\alpha}$. Once one suspect a cointegrating relation, it is possible to test it. To do so, it is first of all necessary to fit:
-$$
-\hat{\beta}_{OLS} = (x_t'x_t)^{-1}x_t'y_t
-$$
-The regression  is then non-spurious if:
-$$
-y_t - \hat{\beta}_{OLS} = \varepsilon_t \sim I(0)
-$$
-
-It is then performed a DF test to test for stationarity of the residuals:
-$$
-H_0: \varepsilon_t \sim I(1)\\
-H_1: \varepsilon_t \sim I(0)
-$$
-Note that in this case there is no need for an ADF test as the cointegration assumption fails with also just one unit root.
-
-Assuming a cointegrating relation, it is possible to exploit mispricing that happen when the value of $\varepsilon_t$ are extreme. 
-
-
-
-import numpy as np 
-import pylab 
-import scipy.stats as stats
-
-import statsmodels.api as sm
-X = data["TS_1"]
-Y = data["TS_2"]
-model = sm.OLS(Y, X).fit()
-print(model.params)
-print(np.var(model.resid))
-
-stats.probplot(model.resid, dist="norm", plot=pylab)
-pylab.show()
-
-
-import statsmodels.api as sm
-X = pd.Series(data["TS_1"])
-# X = sm.add_constant(X)
-Y = pd.Series(data["TS_2"])
-model = sm.OLS(Y, X).fit()
-print(model.params)
-print(np.var(model.resid))
-
-lower_bound_open = np.percentile(model.resid, q = 5)
-lower_bound_close = np.percentile(model.resid, q = 20)
-upper_bound_open = np.percentile(model.resid, q = 95)
-upper_bound_close = np.percentile(model.resid, q = 80)
-position= set_position_long(model.resid, lower_bound_open, lower_bound_close, upper_bound_open, upper_bound_close)
-profits = compute_profit(Y.tolist(), position)
-
-print(sum(profits))
-plt.plot(pd.Series(compute_profit(data["TS_2"].tolist(), position)).cumsum())
-
-
-import statsmodels.api as sm
-Y = pd.Series(data["TS_1"])
-# X = sm.add_constant(X)
-X = pd.Series(data["TS_2"])
-model = sm.OLS(Y, X).fit()
-print(model.params)
-print(np.var(model.resid))
-
-lower_bound_open = np.percentile(model.resid, q = 5)
-lower_bound_close = np.percentile(model.resid, q = 20)
-upper_bound_open = np.percentile(model.resid, q = 95)
-upper_bound_close = np.percentile(model.resid, q = 80)
-position= set_position_long(model.resid, lower_bound_open, lower_bound_close, upper_bound_open, upper_bound_close)
-profits = compute_profit(Y.tolist(), position)
-
-print(sum(profits))
-plt.plot(pd.Series(compute_profit(data["TS_1"].tolist(), position)).cumsum())
